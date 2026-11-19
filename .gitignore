@@ -1,0 +1,26 @@
+# Secrets: never commit
+.env
+client_secret*.json
+*.token.json
+token.json
+
+# Runtime state and media
+queue.db
+queue.db-*
+media/raw/*
+media/transcripts/*
+media/edits/*
+media/comments/*
+media/tts/*
+media/review/*
+!media/**/.gitkeep
+logs/*
+!logs/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
