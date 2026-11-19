@@ -24,3 +24,7 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# Licensed music: keep the files local, never in a public repo
+assets/music/*
+!assets/music/README.md
