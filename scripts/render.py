@@ -86,7 +86,11 @@ def build_ass(cfg: Config, spec: dict[str, Any], length: float) -> str:
     ml, mr = int(W * spec_mod.SAFE["x_min"]) + 15, int(W * (1 - spec_mod.SAFE["x_max"])) + 15
     cap_v = int(H * (1 - 0.70))          # caption baseline at ~70% of frame height
     credit_v = int(H * spec_mod.SAFE["y_min"]) + 10
-    hook_v = credit_v + 80
+    # hook: "middle" (default) sits in the centre of the frame, clear of a facecam at the top
+    if cfg["render"].get("hook_position", "middle") == "top":
+        hook_align, hook_v = 8, credit_v + 80
+    else:
+        hook_align, hook_v = 5, 0
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -97,7 +101,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Caption,{font},78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,2,2,{ml},{mr},{cap_v},1
-Style: Hook,{font},74,&H0000E5FF,&H0000E5FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,3,4,0,8,{ml},{mr},{hook_v},1
+Style: Hook,{font},80,&H0000E5FF,&H0000E5FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,3,4,0,{hook_align},{ml},{mr},{hook_v},1
 Style: Credit,{font},40,&H00FFFFFF,&H00FFFFFF,&H00000000,&H78000000,0,0,0,0,100,100,0,0,3,3,0,8,{ml},{mr},{credit_v},1
 
 [Events]
@@ -144,8 +148,20 @@ def _enable(windows: list[tuple[float, float]]) -> str:
     return "+".join(f"between(t\\,{a:.2f}\\,{b:.2f})" for a, b in windows)
 
 
+def pick_music(cfg: Config, spec: dict[str, Any], row_id: int) -> Path | None:
+    """The spec's track if it names one, else rotate through the music library by row id."""
+    m = cfg.get("music", {}) or {}
+    if not m.get("enabled", False) or spec.get("music") is False:
+        return None
+    lib = (cfg.paths.root / m.get("dir", "assets/music")).resolve()
+    if spec.get("music"):
+        return lib / str(spec["music"])
+    tracks = sorted(p for p in lib.glob("*") if p.suffix.lower() in (".mp3", ".wav", ".m4a", ".ogg", ".flac"))
+    return tracks[row_id % len(tracks)] if tracks else None
+
+
 def build_command(cfg: Config, src: Path, spec: dict[str, Any], narr_files: list[tuple[Path, float, float]],
-                  ass_path: Path, out: Path) -> list[str]:
+                  ass_path: Path, out: Path, music: Path | None = None) -> list[str]:
     W, H, fps = cfg["render"]["width"], cfg["render"]["height"], cfg["render"]["fps"]
     segs = spec["segments"]
     args: list[str] = []
@@ -159,6 +175,8 @@ def build_command(cfg: Config, src: Path, spec: dict[str, Any], narr_files: list
     sfx_dir = (cfg.paths.root / cfg["render"].get("sfx_dir", "assets/sfx")).resolve()
     for s in sfx:
         args += ["-i", str(sfx_dir / s["file"])]
+    if music:
+        args += ["-stream_loop", "-1", "-i", str(music)]
 
     parts = [_video_chain(i, s, spec, W, H, fps) for i, s in enumerate(segs)]
     parts += [f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo[a{i}]" for i in range(n)]
@@ -187,6 +205,18 @@ def build_command(cfg: Config, src: Path, spec: dict[str, Any], narr_files: list
         idx = n + len(narr_files) + k
         parts.append(f"[{idx}:a]aresample=48000,aformat=channel_layouts=stereo,adelay={ms}|{ms},volume=-6dB[s{k}]")
         mix_in.append(f"[s{k}]")
+    if music:
+        length = spec_mod.total_length(spec)
+        mcfg = cfg.get("music", {}) or {}
+        mdb = float(spec.get("music_db", mcfg.get("volume_db", -22)))
+        extra = float(mcfg.get("duck_under_narration_db", -8))
+        idx = n + len(narr_files) + len(sfx)
+        steps = [f"atrim=0:{length:.2f}", "asetpts=PTS-STARTPTS", "aresample=48000", "aformat=channel_layouts=stereo",
+                 "afade=t=in:d=0.6", f"afade=t=out:st={max(0.0, length - 1.5):.2f}:d=1.5", f"volume={mdb}dB"]
+        if duck:
+            steps.append(f"volume=enable='{_enable(duck)}':volume={extra}dB")
+        parts.append(f"[{idx}:a]{','.join(steps)}[mus]")
+        mix_in.append("[mus]")
     lufs = cfg["render"].get("loudness_lufs", -14)
     parts.append(f"{''.join(mix_in)}amix=inputs={len(mix_in)}:normalize=0:duration=first,"
                  f"loudnorm=I={lufs}:TP=-1.5:LRA=11,aresample=48000[aout]")
@@ -216,6 +246,7 @@ def check_row(cfg: Config, row: dict[str, Any], perms: Permissions) -> tuple[Pat
         spec, row=row, source_duration=source_duration(cfg, row["source_file"]),
         layouts=list(cfg["layouts"].keys()), previous_layout=None,
         sfx_dir=cfg.paths.root / r.get("sfx_dir", "assets/sfx"),
+        music_dir=cfg.paths.root / (cfg.get("music", {}) or {}).get("dir", "assets/music"),
         min_s=r.get("min_seconds", 20), max_s=r.get("max_seconds", 45),
     )
     if errs:
@@ -240,7 +271,8 @@ def render_row(cfg: Config, q: Queue, row: dict[str, Any], perms: Permissions) -
         ass = tdp / "subs.ass"
         ass.write_text(build_ass(cfg, spec, length), encoding="utf-8")
         tmp_out = out.with_suffix(".part.mp4")
-        run_ffmpeg(build_command(cfg, src, spec, narr, ass, tmp_out))
+        music = pick_music(cfg, spec, int(row["id"]))
+        run_ffmpeg(build_command(cfg, src, spec, narr, ass, tmp_out, music))
         tmp_out.replace(out)
     q.transition("render", row["id"], "edited", note=f"rendered {out.name}", output_file=out.name)
     log(cfg, "render", "rendered", row=row["id"], file=out.name, seconds=round(length, 2))

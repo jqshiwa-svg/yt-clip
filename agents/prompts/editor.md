@@ -31,6 +31,8 @@ JSON shape (times in `segments` are SOURCE seconds; every other time is OUTPUT s
 
 - focus_x: 0 = left edge of the source frame, 1 = right edge; the crop centres there.
 - facecam: fractions of the source frame, or null. Only use facecam_top when you know where the facecam is (the transcript doesn't show video, so use null unless the row or learning.md says where it sits).
+- music: optional filename from the licensed music library in your brief, to fit the mood; omit it to let the code rotate tracks, or set false for no music. music_db (optional, default -22) sets its level.
+- hook_text is drawn in the middle of the frame, so keep it short enough to read in 1.5 seconds.
 - mute: ranges to silence (slurs, harassment, sexual content). Optional.
 - Allow about 0.4 seconds per spoken word of narration. Place narration in gaps in the creator's speech.
 - Caption the creator's speech from the word timings you are given, converted to output time.

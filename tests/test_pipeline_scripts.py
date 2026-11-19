@@ -165,3 +165,18 @@ def test_render_rejects_segments_outside_source(cfg, source_video):
     render.run(cfg)
     assert q.get(vid)["status"] == "rejected"
     assert "outside" in q.get(vid)["review_notes"]
+
+
+def test_render_with_background_music(cfg, source_video):
+    from clipper.media import run_ffmpeg
+    mdir = cfg.paths.root / "assets" / "music"
+    mdir.mkdir(parents=True, exist_ok=True)
+    run_ffmpeg(["-f", "lavfi", "-i", "sine=frequency=330:duration=8", str(mdir / "loop.mp3")])  # shorter than the video: must loop
+    q = Queue(cfg.paths.db)
+    vid = _scripted_row(q, _spec(music="loop.mp3"))
+    bad = _scripted_row(q, _spec(music="../../somewhere/song.mp3"))
+    res = render.run(cfg)
+    assert vid in res["rendered"] and bad in res["refused"]
+    out = cfg.paths.edits / q.get(vid)["output_file"]
+    assert abs(probe_duration(out) - 24.0) < 0.6
+    assert "music" in q.get(bad)["review_notes"]

@@ -17,7 +17,7 @@ def total_length(spec: dict[str, Any]) -> float:
 
 def validate(spec: Any, *, row: dict[str, Any], source_duration: float | None, layouts: list[str],
              previous_layout: str | None, sfx_dir: Path, min_s: float = 20, max_s: float = 45,
-             hard_max_s: float = 60) -> list[str]:
+             hard_max_s: float = 60, music_dir: Path | None = None) -> list[str]:
     """Return a list of problems. Empty list = valid."""
     errs: list[str] = []
     if not isinstance(spec, dict):
@@ -118,6 +118,13 @@ def validate(spec: Any, *, row: dict[str, Any], source_duration: float | None, l
         f = (lib / str(s.get("file", ""))).resolve()
         if lib not in f.parents or not f.is_file():
             errs.append(f"sfx[{i}]: '{s.get('file')}' is not in the approved library {sfx_dir}")
+
+    music = spec.get("music")
+    if music not in (None, False, ""):
+        mlib = (music_dir or sfx_dir.parent / "music").resolve()
+        mf = (mlib / str(music)).resolve()
+        if mlib not in mf.parents or not mf.is_file():
+            errs.append(f"music: '{music}' is not in the licensed music library {mlib}")
 
     db = spec.get("source_audio_db", -12)
     try:

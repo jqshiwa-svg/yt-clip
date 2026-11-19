@@ -45,6 +45,7 @@ tts:
   provider: "elevenlabs"            # elevenlabs | flite (offline robot voice, previews only) | test (tone)
   voice_id: ""                      # your ElevenLabs voice id
   model_id: "eleven_multilingual_v2"
+  flite_voice: "slt"                # only for provider: flite
 
 # Rendering
 render:
@@ -56,6 +57,15 @@ render:
   min_seconds: 20
   max_seconds: 45
   sfx_dir: "assets/sfx"             # approved sound-effect library: only files in here may be used
+  hook_position: "middle"           # middle (centre of frame, clear of the facecam) | top
+
+# Background music. Only put tracks in the folder that you are licensed to use on YouTube
+# (see assets/music/README.md). With no tracks in the folder, videos render without music.
+music:
+  enabled: true
+  dir: "assets/music"
+  volume_db: -22                    # music level under the game audio
+  duck_under_narration_db: -8       # extra dip while the voice-over speaks
 
 # Three layouts, rotated so no two consecutive videos share one.
 layouts:
