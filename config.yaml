@@ -42,7 +42,7 @@ intake:
 
 # Text-to-speech
 tts:
-  provider: "elevenlabs"            # elevenlabs | test (test = tone, for local testing only)
+  provider: "elevenlabs"            # elevenlabs | flite (offline robot voice, previews only) | test (tone)
   voice_id: ""                      # your ElevenLabs voice id
   model_id: "eleven_multilingual_v2"
 

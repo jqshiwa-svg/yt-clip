@@ -42,6 +42,13 @@ def tts(cfg: Config, text: str, out: Path) -> Path:
         dur = max(1.0, 0.36 * len(text.split()))
         run_ffmpeg(["-f", "lavfi", "-i", f"sine=frequency=660:duration={dur:.2f}", "-ac", "2", "-ar", "48000", str(out)])
         return out
+    if provider == "flite":  # offline robotic voice built into FFmpeg; for previews, not for publishing
+        txt = out.with_suffix(".txt")
+        txt.write_text(text, encoding="utf-8")
+        path = str(txt).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+        run_ffmpeg(["-f", "lavfi", "-i", f"flite=textfile='{path}':voice={t.get('flite_voice', 'slt')}",
+                    "-ac", "2", "-ar", "48000", str(out)])
+        return out
     if provider == "elevenlabs":
         key = cfg.secret("ELEVENLABS_API_KEY")
         voice = t.get("voice_id")
